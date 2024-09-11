@@ -1,0 +1,22 @@
+{
+  "name": "kyc_package",
+  "version": "1.0.0",
+  "description": "For launching the kyc module",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"No test specified\"",
+    "start": "node index.js"
+  },
+  "keywords": [
+    "kyc",
+    "cloudSpace",
+    "bank"
+  ],
+  "tags": [
+    "kyc",
+    "cloudSpace",
+    "bank"
+  ],
+  "author": "cloudspacetech",
+  "license": "ISC"
+}
