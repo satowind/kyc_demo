@@ -1,26 +1,4 @@
-"use strict";
 (function (global) {
-  let baseURI;
-  //demo init
-  if (window.location.href.includes("localhost")) {
-    baseURI = "http://localhost:9088/api/v1";
-  } else {
-    baseURI = "https://kyc.cloudspacetechs.com/api/v1";
-  }
-  //todo: we may need to rename these variables (or use as properties)
-  let faceImages = [];
-  let IS_WEBCAM_ACTIVE = false;
-  let AUTH_UPDATE_MODE = false;
-  let activeACID = "";
-  let CHALLENGE_TOKEN = null;
-  let CHALLENGE_LOGIN = null;
-  let SESSION_ID = null;
-  let AUTH_TOKEN = null;
-  const VERIFY_HEADING = "Choose Verification Method";
-  const VERIFY_TEXT = "Choose preferred means to verify your identity";
-  const UPDATE_HEADING = "Update Verification Methods";
-  const UPDATE_TEXT = "Choose a verification method to update";
-
   let mouseData = [];
   let touchData = [];
   let injectedScripts = [];
@@ -115,13 +93,34 @@
     trackInjectedContent();
   });
 
-  const AcidCheck = {
-    async initialize(acid, displayName) {
+  class AcidCheck {
+    CHALLENGE_TOKEN = null;
+    CHALLENGE_LOGIN = null;
+    AUTH_UPDATE_MODE = false;
+    faceImages = [];
+    IS_WEBCAM_ACTIVE = false;
+    SESSION_ID = null;
+    AUTH_TOKEN = null;
+    VERIFY_HEADING = "Choose Verification Method";
+    VERIFY_TEXT = "Choose preferred means to verify your identity";
+    UPDATE_HEADING = "Update Verification Methods";
+    UPDATE_TEXT = "Choose a verification method to update";
+
+    constructor(acid, email, baseURI = "http://localhost:9088/api/v1") {
+      this.acid = acid;
+      this.email = email;
+      this.baseURI = baseURI;
+    }
+
+    async initialize() {
       try {
-        activeACID = acid;
         const position = await this.getLocation();
         const token = localStorage.getItem("trusted_device_token");
-        const trustInfo = await this.checkTrustedUser(acid, position, token);
+        const trustInfo = await this.checkTrustedUser(
+          this.acid,
+          position,
+          token
+        );
 
         if (trustInfo.challenge != 0) {
           await this.checkUserPresence(trustInfo);
@@ -130,30 +129,31 @@
         }
       } catch (error) {
         console.error("Error:", error);
+        this.showToast("Failed to initialize", 3000);
       }
-    },
+    }
 
-    async initializeUpdate(acid, displayName) {
+    async initializeUpdate() {
       try {
-        activeACID = acid;
         this.createAuthModal(true);
       } catch (error) {
         console.error("Error:", error);
+        this.showToast("Failed to initialize", 3000);
       }
-    },
+    }
 
     async verifyPin(token) {
       const deviceToken = localStorage.getItem("trusted_device_token");
 
       const formData = {
-        acid: activeACID,
+        acid: this.acid,
         otp: token,
         deviceToken,
-        loginAID: SESSION_ID,
+        loginAID: this.SESSION_ID,
       };
 
       try {
-        const response = await fetch(`${baseURI}/verify-totp`, {
+        const response = await fetch(`${this.baseURI}/verify-totp`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -167,26 +167,29 @@
 
         const result = await response.json();
         console.log("verify result: ", result);
+
         this.successAuth(true);
         return result;
       } catch (err) {
         console.error("Error verifying OTP:", err);
+        this.showToast("Failed to verify OTP", 3000);
         return false;
       }
-    },
+    }
 
     async verifyTPN(token) {
       const rm = document.getElementById("tpn-error");
       if (rm) rm.remove();
 
       const formData = {
-        acid: activeACID,
+        acid: this.acid,
+        email: this.email,
         otp: token,
-        loginAID: SESSION_ID,
+        loginAID: this.SESSION_ID,
       };
 
       try {
-        const response = await fetch(`${baseURI}/verify-tpn`, {
+        const response = await fetch(`${this.baseURI}/verify-tpn`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -202,6 +205,7 @@
         if (!result.success) {
           const mainElement = document.getElementById("tpn-pin-ct");
           console.error("Error registering TPN:", result);
+          this.showToast("Failed to verify TPN", 3000);
           const siblingElement = document.createElement("p");
           siblingElement.id = "tpn-error";
           siblingElement.style.color = "red";
@@ -222,21 +226,23 @@
         return result;
       } catch (err) {
         console.error("Error verifying OTP:", err);
+        this.showToast("Failed to verify TPN", 3000);
         return false;
       }
-    },
+    }
 
     async sendOtp() {
       const deviceToken = localStorage.getItem("trusted_device_token");
 
       const formData = {
-        acid: activeACID,
+        acid: this.acid,
+        email: this.email,
         deviceToken,
-        loginAID: SESSION_ID,
+        loginAID: this.SESSION_ID,
       };
 
       try {
-        const response = await fetch(`${baseURI}/send-totp`, {
+        const response = await fetch(`${this.baseURI}/send-totp`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -254,14 +260,15 @@
         return result;
       } catch (err) {
         console.error("Error verifying OTP:", err);
+        this.showToast("Failed to send OTP", 3000);
         return false;
       }
-    },
+    }
 
     async requestQR() {
       try {
         const response = await fetch(
-          `${baseURI}/generate-totp?acid=${activeACID}`,
+          `${this.baseURI}/generate-totp?acid=${this.acid}`,
           {
             method: "GET",
             headers: {
@@ -299,9 +306,10 @@
         return result;
       } catch (err) {
         console.error("Error getting secret:", err);
+        this.showToast("Failed to request QR", 3000);
         return false;
       }
-    },
+    }
 
     async registerTPN() {
       //todo: update token
@@ -311,14 +319,15 @@
 
         const tpnInput = document.getElementById("tpn-auth-input");
         const tpn = document.getElementById("tpn-auth-input").value;
-        const response = await fetch(`${baseURI}/register-tpn`, {
+        const response = await fetch(`${this.baseURI}/register-tpn`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            acid: activeACID,
+            acid: this.acid,
             tpn: tpn,
+            email: this.email,
           }),
         });
 
@@ -329,6 +338,7 @@
         const result = await response.json();
         if (!result.success) {
           console.error("Error registering TPN:", result);
+          this.showToast("Failed to register TPN", 3000);
           const siblingElement = document.createElement("p");
           siblingElement.id = "tpn-error";
           siblingElement.style.color = "red";
@@ -357,19 +367,20 @@
         return result;
       } catch (err) {
         console.error("Error getting secret:", err);
+        this.showToast("Failed to register TPN", 3000);
         return false;
       }
-    },
+    }
 
     async saveUser(token) {
       localStorage.setItem("trusted_device_token", token);
-    },
+    }
 
     setAuthToken(token) {
       if (token) {
-        AUTH_TOKEN = token;
+        this.AUTH_TOKEN = token;
       }
-    },
+    }
 
     async checkTrustedUser(acid, position, token) {
       const result = {
@@ -382,7 +393,7 @@
       };
 
       try {
-        const response = await fetch(`${baseURI}/identity`, {
+        const response = await fetch(`${this.baseURI}/identity`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -403,14 +414,15 @@
           this.saveUser(data.deviceToken);
         }
         if (data.loginAID) {
-          SESSION_ID = data.loginAID;
+          this.SESSION_ID = data.loginAID;
         }
         return data;
       } catch (error) {
+        this.showToast("Failed to check trusted user", 3000);
         console.error("Failed to check trusted user:", error);
         return { error: error.message };
       }
-    },
+    }
 
     async getLocation() {
       return new Promise((resolve) => {
@@ -431,35 +443,35 @@
           resolve({ latitude: "unknown", longitude: "unknown" });
         }
       });
-    },
+    }
 
     async getChallengeToken(isLogin = false) {
       if (isLogin) {
-        if (CHALLENGE_LOGIN) return CHALLENGE_LOGIN;
+        if (this.CHALLENGE_LOGIN) return this.CHALLENGE_LOGIN;
       } else {
-        if (CHALLENGE_TOKEN) return CHALLENGE_TOKEN;
+        if (this.CHALLENGE_TOKEN) return this.CHALLENGE_TOKEN;
       }
       const curl = isLogin ? "generate-login" : "generate-challenge";
-      const response = await fetch(`${baseURI}/${curl}`, {
+      const response = await fetch(`${this.baseURI}/${curl}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          acid: activeACID,
+          acid: this.acid,
         }),
       });
 
       const data = await response.json();
 
       if (isLogin) {
-        CHALLENGE_LOGIN = data;
+        this.CHALLENGE_LOGIN = data;
       } else {
-        CHALLENGE_TOKEN = data;
+        this.CHALLENGE_TOKEN = data;
       }
       //todo: handle errors
       return data;
-    },
+    }
 
     async registerUserCredentials() {
       try {
@@ -468,6 +480,7 @@
         //use ACID for now but should probably be NAME (ACID)
 
         const publicKey = preformatMakeCredReq(payload);
+
         const credential = await navigator.credentials.create({ publicKey });
         const credResponse = publicKeyCredentialToJSON(credential);
         const authData = encode(credential.response.getAuthenticatorData());
@@ -475,7 +488,7 @@
         // Send result to server for verification and storage
         const resp = await this.sendToServer(
           {
-            acid: activeACID,
+            acid: this.acid,
             payload: credResponse,
             authenticatorData: authData,
           },
@@ -485,9 +498,10 @@
           await this.finishAuth();
         }
       } catch (error) {
+        this.showToast("Error during registration:", 3000);
         console.error("Error during registration:", error);
       }
-    },
+    }
 
     async verifyUserCredentials() {
       try {
@@ -499,12 +513,13 @@
         const getAssertionResponse = publicKeyCredentialToJSON(credentials);
 
         console.log("Authentication successful", getAssertionResponse);
+        this.showToast("Authentication successful", 3000);
         // Send result to server for verification
         const response = await this.sendToServer(
           {
-            acid: activeACID,
+            acid: this.acid,
             payload: getAssertionResponse,
-            loginAID: SESSION_ID,
+            loginAID: this.SESSION_ID,
           },
           "/credentials/verify"
         );
@@ -517,13 +532,14 @@
         }
         return response;
       } catch (error) {
+        this.showToast("Error during authentication:", 3000);
         console.error("Error during authentication:", error);
       }
-    },
+    }
 
     async sendToServer(data, endpoint) {
       try {
-        const response = await fetch(`${baseURI}${endpoint}`, {
+        const response = await fetch(`${this.baseURI}${endpoint}`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -533,14 +549,18 @@
 
         if (!response.ok) {
           console.error(`Failed to send data to ${endpoint}`);
+          this.showToast(`Failed to send data to ${endpoint}`, 3000);
         } else {
           console.log(`Data sent to ${endpoint} successfully`);
+          this.showToast(`Data sent to ${endpoint} successfully`, 3000);
           return await response.json();
         }
       } catch (error) {
+        this.showToast(`Error sending data to ${endpoint}`, 3000);
+
         console.error(`Error sending data to ${endpoint}:`, error);
       }
-    },
+    }
 
     async checkUserPresence(trustInfo) {
       const { challenge, userFaceCaptured, webAuthnCaptured, totpCaptured } =
@@ -549,7 +569,7 @@
       //if nothing available, do a manual video recording upload/login request
       //send notification to fraud team on backend
       this.createAuthModal();
-    },
+    }
 
     async isWebcamAvailable() {
       try {
@@ -559,13 +579,15 @@
         stream.getTracks().forEach((track) => track.stop());
         return true;
       } catch (error) {
+        this.showToast("Webcam is not available", 3000);
+
         console.error("Webcam is not available:", error);
         return false;
       }
-    },
+    }
 
     createAuthModal(isUpdate = false) {
-      AUTH_UPDATE_MODE = isUpdate;
+      this.AUTH_UPDATE_MODE = isUpdate;
       const authOverlay = document.createElement("div");
       authOverlay.id = "auth-overlay";
       authOverlay.style.cssText = `
@@ -578,6 +600,9 @@
         width: 100%;
         background-color: rgba(17, 24, 39, 0.5);
       `;
+      authOverlay.onclick = () => {
+        this.removeAuthModal();
+      };
 
       const modalCard = document.createElement("div");
       modalCard.id = "acidModalBody";
@@ -591,6 +616,9 @@
         text-align: center;
         z-index:20;
       `;
+      modalCard.onclick = function (event) {
+        event.stopPropagation();
+      };
 
       const modalClose = document.createElement("span");
       modalClose.id = "modalClose";
@@ -601,13 +629,15 @@
         top: -20px;
         font-size: 18px;
       `;
-      modalClose.onclick = function () {
-        AcidCheck.removeAuthModal();
+      modalClose.onclick = () => {
+        this.removeAuthModal();
       };
 
       const heading = document.createElement("h2");
       heading.id = "headingText";
-      heading.textContent = isUpdate ? UPDATE_HEADING : VERIFY_HEADING;
+      heading.textContent = isUpdate
+        ? this.UPDATE_HEADING
+        : this.VERIFY_HEADING;
       heading.style.cssText = `
         font-size: 1.5rem;
         font-family: system-ui, sans-serif;
@@ -619,7 +649,7 @@
 
       const subheading = document.createElement("p");
       subheading.id = "infoText";
-      subheading.textContent = isUpdate ? UPDATE_TEXT : VERIFY_TEXT;
+      subheading.textContent = isUpdate ? this.UPDATE_TEXT : this.VERIFY_TEXT;
       subheading.style.cssText = `
         font-size: 0.85rem;
         font-family: system-ui, sans-serif;
@@ -664,11 +694,11 @@
         isUpdate ? "Update Biometrics" : "Device Biometrics",
         "home",
         isUpdate
-          ? function () {
-              AcidCheck.registerUserCredentials();
+          ? () => {
+              this.registerUserCredentials();
             }
-          : function () {
-              AcidCheck.verifyUserCredentials();
+          : () => {
+              this.verifyUserCredentials();
             }
       );
       boxContainer.appendChild(deviceButton);
@@ -676,8 +706,8 @@
         "camera-button",
         isUpdate ? "Update Photo" : "Face Verification",
         "camera",
-        function () {
-          AcidCheck.startWebcam();
+        () => {
+          this.startWebcam();
         }
       );
       boxContainer.appendChild(cameraButton);
@@ -685,8 +715,8 @@
         "otp-button",
         isUpdate ? "Update QR Code/PIN" : "QR Code/PIN",
         "key",
-        function () {
-          AcidCheck.startOTP();
+        () => {
+          this.startOTP();
         }
       );
       boxContainer.appendChild(otpButton);
@@ -694,8 +724,8 @@
         "sec-button",
         isUpdate ? "Update Trusted Party" : "Trusted Party Auth",
         "question",
-        function () {
-          AcidCheck.activateTPNElements();
+        () => {
+          this.activateTPNElements();
         }
       );
       boxContainer.appendChild(securityButton);
@@ -709,12 +739,12 @@
       this.createWebcamElements();
       this.createQRAuthElements();
       this.createTPNModal();
-    },
+    }
 
     removeAuthModal() {
       const element = document.getElementById("auth-overlay");
       element.remove();
-    },
+    }
 
     createAuthButton(id, buttonText, icon, clickFunc) {
       const authButton = document.createElement("button");
@@ -754,7 +784,7 @@
       deviceIcon.innerHTML = this.getIconSVG(icon);
       authButton.appendChild(deviceIcon);
       return authButton;
-    },
+    }
 
     getIconSVG(iconName) {
       switch (iconName) {
@@ -769,7 +799,7 @@
         default:
           return "";
       }
-    },
+    }
 
     async getBotness() {
       const userAgent = navigator.userAgent;
@@ -874,7 +904,7 @@
         pageHtml: document.documentElement.outerHTML,
         events: { mouseData, touchData },
       };
-    },
+    }
 
     createResultOverlay() {
       const resultOverlay = document.createElement("div");
@@ -920,7 +950,7 @@
       resultOverlay.appendChild(resultIconContainer);
       resultOverlay.appendChild(resultTextContainer);
       return resultOverlay;
-    },
+    }
 
     createWebcamElements() {
       const webcamContainer = document.createElement("div");
@@ -997,7 +1027,7 @@
       const modalCard = document.getElementById("acidModalBody");
       modalCard.appendChild(webcamContainer);
       modalCard.appendChild(resultOverlay);
-    },
+    }
 
     createQRAuthElements() {
       const qrAuthContainer = document.createElement("div");
@@ -1013,7 +1043,7 @@
 
       let scanImage = null;
 
-      if (AUTH_UPDATE_MODE) {
+      if (this.AUTH_UPDATE_MODE) {
         scanImage = document.createElement("img");
         scanImage.id = "qr-auth-img";
         scanImage.alt = "Loading..."; //todo: we can do better lol
@@ -1065,7 +1095,7 @@
               const pinCode = Array.from(pinContainer.querySelectorAll("input"))
                 .map((input) => input.value)
                 .join("");
-              AcidCheck.verifyPin(pinCode);
+              this.verifyPin(pinCode);
               //attempt auto verify
               //todo: if verification fails, reset pin input
             }
@@ -1113,12 +1143,12 @@
         cursor: pointer;
         transition: background-color 0.3s ease;
       `;
-      verifyButton.onclick = function () {
+      verifyButton.onclick = () => {
         const pinCode = Array.from(pinContainer.querySelectorAll("input"))
           .map((input) => input.value)
           .join("");
         console.log("verifying PIN:", pinCode);
-        AcidCheck.verifyPin(pinCode);
+        this.verifyPin(pinCode);
       };
 
       const continueButton = document.createElement("button");
@@ -1136,8 +1166,8 @@
         cursor: pointer;
         transition: background-color 0.3s ease;
       `;
-      continueButton.onclick = function () {
-        AcidCheck.requestQR();
+      continueButton.onclick = () => {
+        this.requestQR();
       };
 
       const cancelButton = document.createElement("button");
@@ -1155,9 +1185,9 @@
         cursor: pointer;
         transition: background-color 0.3s ease;
       `;
-      cancelButton.onclick = function () {
-        AcidCheck.stopQR();
-        AcidCheck.resetAuthElements();
+      cancelButton.onclick = () => {
+        this.stopQR();
+        this.resetAuthElements();
       };
 
       const buttonContainer = document.createElement("div");
@@ -1169,7 +1199,7 @@
       `;
       buttonContainer.appendChild(cancelButton);
 
-      if (AUTH_UPDATE_MODE) {
+      if (this.AUTH_UPDATE_MODE) {
         pinContainer.style.display = "none";
         qrAuthContainer.appendChild(scanImage);
         buttonContainer.appendChild(continueButton);
@@ -1215,16 +1245,16 @@
         }
       `;
       document.head.appendChild(style);
-    },
+    }
 
     activateQRElements() {
       const heading = document.getElementById("headingText");
-      heading.textContent = AUTH_UPDATE_MODE
+      heading.textContent = this.AUTH_UPDATE_MODE
         ? "QR Token Update"
         : "Token Verification";
 
       const subheading = document.getElementById("infoText");
-      subheading.textContent = AUTH_UPDATE_MODE
+      subheading.textContent = this.AUTH_UPDATE_MODE
         ? "Scan the QR Code below with Microsoft or Google Authenticator"
         : "Enter OTP registered via Microsoft/Google Authenticator";
 
@@ -1233,22 +1263,22 @@
 
       const qrContainer = document.getElementById("qr-auth-container");
       qrContainer.style.display = "block";
-      if (AUTH_UPDATE_MODE) {
+      if (this.AUTH_UPDATE_MODE) {
         this.requestQR();
       } else {
         const pinInputs = document.getElementsByClassName("qr-pi");
         pinInputs[0].focus();
       }
-    },
+    }
 
     activateTPNElements() {
       const heading = document.getElementById("headingText");
-      heading.textContent = AUTH_UPDATE_MODE
+      heading.textContent = this.AUTH_UPDATE_MODE
         ? "Trusted Party Number Update"
         : "Trusted Party Authentication";
 
       const subheading = document.getElementById("infoText");
-      subheading.textContent = AUTH_UPDATE_MODE
+      subheading.textContent = this.AUTH_UPDATE_MODE
         ? "Enter a trusted phone number which can help authenticate you if your device is compromised"
         : "Enter the 6 digit code sent to the trusted party on your account";
 
@@ -1257,7 +1287,7 @@
 
       const qrContainer = document.getElementById("tpn-auth-container");
       qrContainer.style.display = "block";
-      if (AUTH_UPDATE_MODE) {
+      if (this.AUTH_UPDATE_MODE) {
         document.getElementById("tpn-auth-input")?.focus();
       } else {
         const pinInputs = document.getElementsByClassName("tpn-pi");
@@ -1265,11 +1295,11 @@
         this.sendOtp();
         pinInputs[0].focus();
       }
-    },
+    }
 
     activateWebcamElements() {
       const heading = document.getElementById("headingText");
-      heading.textContent = AUTH_UPDATE_MODE
+      heading.textContent = this.AUTH_UPDATE_MODE
         ? "Face Registration/Update"
         : "Identity Verification";
 
@@ -1286,9 +1316,9 @@
 
       const actionButton = document.createElement("button");
       actionButton.id = "verify-button";
-      actionButton.onclick = function () {
-        AcidCheck.stopWebcam();
-        AcidCheck.resetAuthElements();
+      actionButton.onclick = () => {
+        this.stopWebcam();
+        this.resetAuthElements();
       };
       actionButton.textContent = "Cancel";
       actionButton.style.cssText = `
@@ -1314,14 +1344,18 @@
       `;
 
       modalCard.appendChild(actionButton);
-    },
+    }
 
     resetAuthElements() {
       const heading = document.getElementById("headingText");
-      heading.textContent = AUTH_UPDATE_MODE ? UPDATE_HEADING : VERIFY_HEADING;
+      heading.textContent = this.AUTH_UPDATE_MODE
+        ? this.UPDATE_HEADING
+        : this.VERIFY_HEADING;
 
       const subheading = document.getElementById("infoText");
-      subheading.textContent = AUTH_UPDATE_MODE ? UPDATE_TEXT : VERIFY_TEXT;
+      subheading.textContent = this.AUTH_UPDATE_MODE
+        ? this.UPDATE_TEXT
+        : this.VERIFY_TEXT;
 
       const boxContainer = document.getElementById("box-container");
       boxContainer.style.display = "grid";
@@ -1329,8 +1363,8 @@
       const modalCard = document.getElementById("acidModalBody");
 
       const actionButton = document.getElementById("verify-button");
-      modalCard.removeChild(actionButton);
-    },
+      if (actionButton) modalCard.removeChild(actionButton);
+    }
 
     async finishAuth() {
       //todo: do some other magic
@@ -1340,13 +1374,18 @@
       }
       //submit recorded data
       const resp = await this.sendToServer(
-        { acid: activeACID, session_id: SESSION_ID, token: AUTH_TOKEN, events },
+        {
+          acid: this.acid,
+          session_id: this.SESSION_ID,
+          token: this.AUTH_TOKEN,
+          events,
+        },
         "/sessions/finish"
       );
       //todo: disable or reset events collection?
       //events = [];
       console.log("Resp:", resp);
-    },
+    }
 
     successAuth(isQrStop = false, isTPN = false) {
       if (isQrStop) {
@@ -1363,8 +1402,8 @@
       if (!actionButton) {
         actionButton = document.createElement("button");
         actionButton.id = "verify-button";
-        actionButton.onclick = function () {
-          AcidCheck.finishAuth();
+        actionButton.onclick = () => {
+          this.finishAuth();
         };
         actionButton.textContent = "Continue";
         actionButton.style.cssText = `
@@ -1394,46 +1433,52 @@
       modalCard.appendChild(actionButton);
 
       const resultOverlay = document.getElementById("resultOverlay"); //show result el
-      actionButton.onclick = function () {
+      actionButton.onclick = () => {
         document.getElementById("resultOverlay").style.display = "none";
         //todo: authentication complete, supply continue token for dismiss modal
-        AcidCheck.finishAuth();
+        this.finishAuth();
       };
+
       if (resultOverlay) {
         resultOverlay.style.display = "block";
       }
       document.getElementById("verify-button").textContent = "Continue";
       const infoText = document.getElementById("infoText"); //change info text
       if (isQrStop) {
-        infoText.innerText = AUTH_UPDATE_MODE
+        infoText.innerText = this.AUTH_UPDATE_MODE
           ? "QR Code/PIN data successfully updated. Press continue to proceed"
           : "Identity successfully verified. Press continue to proceed";
       } else {
-        infoText.innerText = AUTH_UPDATE_MODE
+        infoText.innerText = this.AUTH_UPDATE_MODE
           ? "Face data successfully updated. Press continue to proceed"
           : "Identity successfully verified. Press continue to proceed";
       }
-    },
+    }
 
     async startWebcam() {
       //todo: consider using loader?
-      IS_WEBCAM_ACTIVE = true;
+      this.IS_WEBCAM_ACTIVE = true;
       const webcamAvailable = await this.isWebcamAvailable();
       if (webcamAvailable) {
         this.activateWebcamElements();
         this.accessWebcam();
         console.log("Webcam access initiated.");
+        this.showToast(
+          "Webcam access initiated. Please make a surprised face.",
+          3000
+        );
       } else {
         console.log("No webcam available.");
+        this.showToast("No webcam available. Please try again.", 3000);
         this.createTPNModal();
         this.showTPNModal();
       }
-    },
+    }
 
     async startOTP() {
       //todo: check if available?, consider using loader?
       this.activateQRElements();
-    },
+    }
 
     async accessWebcam() {
       const video = document.getElementById("webcam");
@@ -1451,29 +1496,32 @@
             50
           );
         } catch (error) {
+          this.showToast("Error accessing webcam. Please try again.", 3000);
+
           console.error("Error accessing webcam: ", error);
         }
       } else {
         console.error("User media not supported.");
+        this.showToast("User media not supported.", 3000);
       }
-    },
+    }
 
     stopQR() {
       const qrContainer = document.getElementById("qr-auth-container"); //hide el
       if (qrContainer) {
         qrContainer.style.display = "none";
       }
-    },
+    }
 
     stopTPN() {
       const tpnContainer = document.getElementById("tpn-auth-container"); //hide el
       if (tpnContainer) {
         tpnContainer.style.display = "none";
       }
-    },
+    }
 
     stopWebcam() {
-      IS_WEBCAM_ACTIVE = false;
+      this.IS_WEBCAM_ACTIVE = false;
       this.isWebcamAvailable(); //release webcam
       const video = document.getElementById("webcam");
       if (video) {
@@ -1484,10 +1532,10 @@
       if (videoContainer) {
         videoContainer.style.display = "none";
       }
-    },
+    }
 
     captureAndSendPhotos() {
-      if (!IS_WEBCAM_ACTIVE) return;
+      if (!this.IS_WEBCAM_ACTIVE) return;
       const video = document.getElementById("webcam");
       const canvas = document.getElementById("canvas");
       const context = canvas.getContext("2d");
@@ -1504,13 +1552,13 @@
           photoCount++;
           setTimeout(() => requestAnimationFrame(captureFrame), 150); // Capture every 150ms
         } else {
-          AcidCheck.uploadImages(faceImages);
+          this.uploadImages(faceImages);
         }
       };
 
       //wait for 1.5s before starting capture
       setTimeout(() => requestAnimationFrame(captureFrame), 500);
-    },
+    }
 
     async uploadImages(images) {
       //todo: monitor time it takes for valid face capture
@@ -1532,14 +1580,14 @@
       });
 
       try {
-        formData.append("acid", activeACID);
-        if (AUTH_UPDATE_MODE) {
+        formData.append("acid", this.acid);
+        if (this.AUTH_UPDATE_MODE) {
           //todo: fix with actual update token
-          formData.append("updateToken", AUTH_TOKEN ?? "DEMO_TOKEN");
+          formData.append("updateToken", this.AUTH_TOKEN ?? "DEMO_TOKEN");
         }
-        formData.append("loginAID", SESSION_ID);
+        formData.append("loginAID", this.SESSION_ID);
 
-        const response = await fetch(`${baseURI}/upload`, {
+        const response = await fetch(`${this.baseURI}/upload`, {
           method: "POST",
           body: formData,
         });
@@ -1570,11 +1618,14 @@
           console.log(result);
         } else {
           console.error("Upload failed:", response.statusText);
+          this.showToast(`Upload failed: ${response.statusText}`, 3000);
         }
       } catch (error) {
+        this.showToast("Error uploading images. Please try again.", 3000);
+
         console.error("Error uploading images:", error);
       }
-    },
+    }
 
     async recordVideo() {
       const video = document.getElementById("video");
@@ -1582,51 +1633,51 @@
       let mediaRecorder;
 
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        navigator.mediaDevices
-          .getUserMedia({ video: true })
-          .then(function (stream) {
-            mediaRecorder = new MediaRecorder(stream);
-            mediaRecorder.start();
+        navigator.mediaDevices.getUserMedia({ video: true }).then((stream) => {
+          mediaRecorder = new MediaRecorder(stream);
+          mediaRecorder.start();
 
-            mediaRecorder.ondataavailable = function (event) {
-              chunks.push(event.data);
-            };
+          mediaRecorder.ondataavailable = function (event) {
+            chunks.push(event.data);
+          };
 
-            mediaRecorder.onstop = async function () {
-              const blob = new Blob(chunks, { type: "video/webm" });
-              const formData = new FormData();
-              formData.append("video", blob, "video.webm");
+          mediaRecorder.onstop = async () => {
+            const blob = new Blob(chunks, { type: "video/webm" });
+            const formData = new FormData();
+            formData.append("video", blob, "video.webm");
 
-              const response = await fetch(`${baseURI}/video/check`, {
-                method: "POST",
-                body: formData,
-              });
+            const response = await fetch(`${this.baseURI}/video/check`, {
+              method: "POST",
+              body: formData,
+            });
 
-              if (response.ok) {
-                console.log("Video uploaded successfully.");
-              } else {
-                console.error("Failed to upload video.");
-              }
-            };
+            if (response.ok) {
+              console.log("Video uploaded successfully.");
+              this.showToast("Video uploaded successfully.", 3000);
+            } else {
+              console.error("Failed to upload video.");
+              this.showToast("Failed to upload video.", 3000);
+            }
+          };
 
-            setTimeout(() => {
-              mediaRecorder.stop();
-            }, 2000); // Record for 2 seconds
-          });
+          setTimeout(() => {
+            mediaRecorder.stop();
+          }, 2000); // Record for 2 seconds
+        });
       }
-    },
+    }
 
     showTPNModal() {
       this.fetchTPNPrompt().then((question) => {
         document.getElementById("tpnPrompt").innerText = question;
       });
-    },
+    }
 
     async fetchTPNPrompt() {
-      const response = await fetch(`${baseURI}/tpn/question`);
+      const response = await fetch(`${this.baseURI}/tpn/question`);
       const data = await response.json();
       return data.question;
-    },
+    }
 
     createTPNModal() {
       const tpnAuthContainer = document.createElement("div");
@@ -1642,7 +1693,7 @@
 
       let tpnInput = null;
 
-      if (AUTH_UPDATE_MODE) {
+      if (this.AUTH_UPDATE_MODE) {
         tpnInput = document.createElement("input");
         tpnInput.id = "tpn-auth-input";
         tpnInput.type = "tel";
@@ -1700,7 +1751,7 @@
               const pinCode = Array.from(pinContainer.querySelectorAll("input"))
                 .map((input) => input.value)
                 .join("");
-              AcidCheck.verifyTPN(pinCode);
+              this.verifyTPN(pinCode);
               //attempt auto verify
               //todo: if verification fails, reset pin input
             }
@@ -1748,12 +1799,12 @@
         cursor: pointer;
         transition: background-color 0.3s ease;
       `;
-      verifyButton.onclick = function () {
+      verifyButton.onclick = () => {
         const pinCode = Array.from(pinContainer.querySelectorAll("input"))
           .map((input) => input.value)
           .join("");
         console.log("verifying PIN:", pinCode);
-        AcidCheck.verifyTPN(pinCode);
+        this.verifyTPN(pinCode);
       };
 
       const continueButton = document.createElement("button");
@@ -1771,8 +1822,8 @@
         cursor: pointer;
         transition: background-color 0.3s ease;
       `;
-      continueButton.onclick = function () {
-        AcidCheck.registerTPN();
+      continueButton.onclick = () => {
+        this.registerTPN();
       };
 
       const cancelButton = document.createElement("button");
@@ -1790,9 +1841,9 @@
         cursor: pointer;
         transition: background-color 0.3s ease;
       `;
-      cancelButton.onclick = function () {
-        AcidCheck.stopTPN();
-        AcidCheck.resetAuthElements();
+      cancelButton.onclick = () => {
+        this.stopTPN();
+        this.resetAuthElements();
       };
 
       const buttonContainer = document.createElement("div");
@@ -1805,7 +1856,7 @@
 
       buttonContainer.appendChild(cancelButton);
 
-      if (AUTH_UPDATE_MODE) {
+      if (this.AUTH_UPDATE_MODE) {
         pinContainer.style.display = "none";
         tpnAuthContainer.appendChild(tpnInput);
         buttonContainer.appendChild(continueButton);
@@ -1851,12 +1902,12 @@
         }
       `;
       document.head.appendChild(style);
-    },
+    }
 
     async submitTPNResponse() {
       const answer = document.getElementById("tpnResponse").value;
 
-      const response = await fetch(`${baseURI}/tpn/answer`, {
+      const response = await fetch(`${this.baseURI}/tpn/answer`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1867,12 +1918,47 @@
 
       if (response.ok) {
         console.log("TPN verified.");
+        this.showToast("TPN verified.", 3000);
         document.getElementById("tpnModal").style.display = "none";
       } else {
         console.error("Failed to verify TPN auth.");
+        this.showToast("Failed to verify TPN auth.", 3000);
       }
-    },
-  };
+    }
+
+    showToast(message, duration) {
+      const toast = document.createElement("div");
+      toast.textContent = message;
+      toast.style.position = "fixed";
+      toast.style.bottom = "20px";
+      toast.style.left = "50%";
+      toast.style.transform = "translateX(-50%)";
+      toast.style.backgroundColor = "#333";
+      toast.style.color = "#fff";
+      toast.style.padding = "10px 20px";
+      toast.style.borderRadius = "5px";
+      toast.style.boxShadow = "0 0 10px rgba(0, 0, 0, 0.1)";
+      toast.style.zIndex = "9999";
+      toast.style.fontSize = "14px";
+      toast.style.opacity = "0";
+      toast.style.transition = "opacity 0.5s ease";
+      document.body.appendChild(toast);
+
+      // Fade in the toast
+      setTimeout(() => {
+        toast.style.opacity = "1";
+      }, 100);
+
+      // Remove the toast after the specified duration
+      setTimeout(() => {
+        toast.style.opacity = "0";
+        // After the fade-out effect, remove the element
+        setTimeout(() => {
+          document.body.removeChild(toast);
+        }, 500); // match the fade-out duration
+      }, duration);
+    }
+  }
 
   global.AcidCheck = AcidCheck;
 
