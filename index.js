@@ -2169,4 +2169,4 @@
   };
 })(window);
 
-export { AcidCheck };
+export default AcidCheck = window.AcidCheck;
