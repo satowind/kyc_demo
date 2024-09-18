@@ -1008,15 +1008,20 @@
 
       const webcamElement = document.createElement("video");
       webcamElement.id = "webcam";
+      webcamElement.playsInline = true;
+      webcamElement.setAttribute("webkit-playsinline", "");
       webcamElement.autoplay = true;
       webcamElement.style.cssText = `
-        width: 100%;
-        height: auto;
-        transform: rotateY(180deg);
-        -webkit-transform:rotateY(180deg);
-        -moz-transform:rotateY(180deg); 
-      `;
-
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotateY(180deg);
+      -webkit-transform: translate(-50%, -50%) rotateY(180deg);
+      -moz-transform: translate(-50%, -50%) rotateY(180deg);
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    `;
       const canvasElement = document.createElement("canvas");
       canvasElement.id = "canvas";
       canvasElement.width = 640;
