@@ -1,6 +1,6 @@
 {
   "name": "kyc_package",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "For launching the kyc module",
   "main": "index.js",
   "scripts": {
