@@ -105,6 +105,17 @@
     VERIFY_TEXT = "Choose preferred means to verify your identity";
     UPDATE_HEADING = "Update Verification Methods";
     UPDATE_TEXT = "Choose a verification method to update";
+    colorDefined = {
+      primary: "#3b82f6",
+      success: "#10b981",
+      danger: "#ef4444",
+      warning: "#f59e0b",
+      default: "#333",
+      error: "#ef4444",
+    };
+
+    retryCount = 0;
+    maxRetries = 2;
 
     constructor(acid, email, baseURI = "http://localhost:9088/api/v1") {
       this.acid = acid;
@@ -129,7 +140,7 @@
         }
       } catch (error) {
         console.error("Error:", error);
-        this.showToast("Failed to initialize", 3000);
+        this.showToast("Failed to initialize", 3000, "danger");
       }
     }
 
@@ -138,7 +149,7 @@
         this.createAuthModal(true);
       } catch (error) {
         console.error("Error:", error);
-        this.showToast("Failed to initialize", 3000);
+        this.showToast("Failed to initialize", 3000, "danger");
       }
     }
 
@@ -166,13 +177,23 @@
         }
 
         const result = await response.json();
+
+        if (!result.success) {
+          console.error("Error verifying OTP:", result);
+          this.showToast(
+            result.error || "Failed to verify OTP",
+            3000,
+            "danger"
+          );
+          return false;
+        }
         console.log("verify result: ", result);
 
         this.successAuth(true);
         return result;
       } catch (err) {
         console.error("Error verifying OTP:", err);
-        this.showToast("Failed to verify OTP", 3000);
+        this.showToast("Failed to verify OTP", 3000, "danger");
         return false;
       }
     }
@@ -205,7 +226,11 @@
         if (!result.success) {
           const mainElement = document.getElementById("tpn-pin-ct");
           console.error("Error registering TPN:", result);
-          this.showToast("Failed to verify TPN", 3000);
+          this.showToast(
+            result.error || "Failed to verify TPN",
+            3000,
+            "danger"
+          );
           const siblingElement = document.createElement("p");
           siblingElement.id = "tpn-error";
           siblingElement.style.color = "red";
@@ -226,7 +251,7 @@
         return result;
       } catch (err) {
         console.error("Error verifying OTP:", err);
-        this.showToast("Failed to verify TPN", 3000);
+        this.showToast("Failed to verify TPN", 3000, "danger");
         return false;
       }
     }
@@ -242,7 +267,7 @@
       };
 
       try {
-        const response = await fetch(`${this.baseURI}/send-totp`, {
+        const response = await fetch(`${this.baseURI}/send-tpn`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -255,12 +280,20 @@
         }
 
         const result = await response.json();
+
+        if (!result.success) {
+          console.error("Error registering TPN:", result);
+          this.showToast(result.error || "Failed to send OTP", 3000, "danger");
+          this.stopTPN();
+          this.resetAuthElements();
+          return false;
+        }
         console.log("verify result: ", result);
         // this.successAuth(true);
         return result;
       } catch (err) {
         console.error("Error verifying OTP:", err);
-        this.showToast("Failed to send OTP", 3000);
+        this.showToast("Failed to send OTP", 3000, "danger");
         return false;
       }
     }
@@ -306,7 +339,7 @@
         return result;
       } catch (err) {
         console.error("Error getting secret:", err);
-        this.showToast("Failed to request QR", 3000);
+        this.showToast("Failed to request QR", 3000, "danger");
         return false;
       }
     }
@@ -338,7 +371,11 @@
         const result = await response.json();
         if (!result.success) {
           console.error("Error registering TPN:", result);
-          this.showToast("Failed to register TPN", 3000);
+          this.showToast(
+            result.error || "Failed to register TPN",
+            3000,
+            "danger"
+          );
           const siblingElement = document.createElement("p");
           siblingElement.id = "tpn-error";
           siblingElement.style.color = "red";
@@ -367,7 +404,7 @@
         return result;
       } catch (err) {
         console.error("Error getting secret:", err);
-        this.showToast("Failed to register TPN", 3000);
+        this.showToast("Failed to register TPN", 3000, "danger");
         return false;
       }
     }
@@ -418,7 +455,7 @@
         }
         return data;
       } catch (error) {
-        this.showToast("Failed to check trusted user", 3000);
+        this.showToast("Failed to check trusted user", 3000, "danger");
         console.error("Failed to check trusted user:", error);
         return { error: error.message };
       }
@@ -498,7 +535,7 @@
           await this.finishAuth();
         }
       } catch (error) {
-        this.showToast("Error during registration:", 3000);
+        this.showToast("Error during registration:", 3000, "danger");
         console.error("Error during registration:", error);
       }
     }
@@ -513,7 +550,7 @@
         const getAssertionResponse = publicKeyCredentialToJSON(credentials);
 
         console.log("Authentication successful", getAssertionResponse);
-        this.showToast("Authentication successful", 3000);
+        this.showToast("Authentication successful", 3000, "success");
         // Send result to server for verification
         const response = await this.sendToServer(
           {
@@ -532,7 +569,7 @@
         }
         return response;
       } catch (error) {
-        this.showToast("Error during authentication:", 3000);
+        this.showToast("Error during authentication:", 3000, "danger");
         console.error("Error during authentication:", error);
       }
     }
@@ -549,14 +586,18 @@
 
         if (!response.ok) {
           console.error(`Failed to send data to ${endpoint}`);
-          this.showToast(`Failed to send data to ${endpoint}`, 3000);
+          this.showToast(`Failed to send data to ${endpoint}`, 3000, "danger");
         } else {
           console.log(`Data sent to ${endpoint} successfully`);
-          this.showToast(`Data sent to ${endpoint} successfully`, 3000);
+          this.showToast(
+            `Data sent to ${endpoint} successfully`,
+            3000,
+            "success"
+          );
           return await response.json();
         }
       } catch (error) {
-        this.showToast(`Error sending data to ${endpoint}`, 3000);
+        this.showToast(`Error sending data to ${endpoint}`, 3000, "danger");
 
         console.error(`Error sending data to ${endpoint}:`, error);
       }
@@ -579,7 +620,7 @@
         stream.getTracks().forEach((track) => track.stop());
         return true;
       } catch (error) {
-        this.showToast("Webcam is not available", 3000);
+        this.showToast("Webcam is not available", 3000, "danger");
 
         console.error("Webcam is not available:", error);
         return false;
@@ -1069,7 +1110,7 @@
 
       for (let i = 0; i < 6; i++) {
         const pinInput = document.createElement("input");
-        pinInput.type = "text";
+        pinInput.type = "password";
         pinInput.maxLength = 1;
         pinInput.className = "qr-pi";
         pinInput.style.cssText = `
@@ -1456,6 +1497,7 @@
     }
 
     async startWebcam() {
+      this.retryCount = 0;
       //todo: consider using loader?
       this.IS_WEBCAM_ACTIVE = true;
       const webcamAvailable = await this.isWebcamAvailable();
@@ -1465,11 +1507,12 @@
         console.log("Webcam access initiated.");
         this.showToast(
           "Webcam access initiated. Please make a surprised face.",
-          3000
+          3000,
+          "warning"
         );
       } else {
         console.log("No webcam available.");
-        this.showToast("No webcam available. Please try again.", 3000);
+        this.showToast("No webcam available. Please try again.", 3000, "error");
         this.createTPNModal();
         this.showTPNModal();
       }
@@ -1492,17 +1535,21 @@
 
           // Start capturing photos after accessing the webcam
           setTimeout(
-            () => requestAnimationFrame(this.captureAndSendPhotos),
+            () => requestAnimationFrame(() => this.captureAndSendPhotos()),
             50
           );
         } catch (error) {
-          this.showToast("Error accessing webcam. Please try again.", 3000);
+          this.showToast(
+            "Error accessing webcam. Please try again.",
+            3000,
+            "error"
+          );
 
           console.error("Error accessing webcam: ", error);
         }
       } else {
         console.error("User media not supported.");
-        this.showToast("User media not supported.", 3000);
+        this.showToast("User media not supported.", 3000, error);
       }
     }
 
@@ -1539,7 +1586,7 @@
       const video = document.getElementById("webcam");
       const canvas = document.getElementById("canvas");
       const context = canvas.getContext("2d");
-      faceImages = [];
+      this.faceImages = [];
       const numPhotos = 8; // Capture 8 photos
       let photoCount = 0;
 
@@ -1548,11 +1595,11 @@
           context.filter = "brightness(1.1) contrast(1.5)";
           context.drawImage(video, 0, 0, canvas.width, canvas.height);
           const dataURL = canvas.toDataURL("image/jpeg", 0.75);
-          faceImages.push(dataURL);
+          this.faceImages.push(dataURL);
           photoCount++;
           setTimeout(() => requestAnimationFrame(captureFrame), 150); // Capture every 150ms
         } else {
-          this.uploadImages(faceImages);
+          this.uploadImages(this.faceImages);
         }
       };
 
@@ -1594,34 +1641,68 @@
 
         if (response.ok) {
           const resJson = await response.json();
-          const result = resJson.result;
-          if (result.error) {
+          const result =
+            typeof resJson.result === "string"
+              ? JSON.parse(resJson.result)
+              : resJson.result;
+
+          if (!result || result.error) {
             //start again after 500ms
-            //todo: check error type and probably choose another auth type?
-            setTimeout(
-              () => requestAnimationFrame(this.captureAndSendPhotos),
-              500
-            );
+            if (this.retryCount < this.maxRetries) {
+              this.retryCount++;
+              //todo: check error type and probably choose another auth type?
+              setTimeout(
+                () => requestAnimationFrame(() => this.captureAndSendPhotos()),
+                500
+              );
+            } else {
+              this.showToast(
+                result.error || "Error uploading images. Please try again.",
+                3000,
+                "error"
+              );
+              this.stopWebcam();
+              this.resetAuthElements();
+            }
           } else {
             if (result.countSurprised > 0) {
               this.setAuthToken(resJson.loginToken);
               this.saveUser(resJson.deviceToken);
               this.successAuth();
             } else {
-              //try for x times?
-              setTimeout(
-                () => requestAnimationFrame(this.captureAndSendPhotos),
-                500
-              );
+              if (this.retryCount < this.maxRetries) {
+                this.retryCount++;
+
+                setTimeout(
+                  () =>
+                    requestAnimationFrame(() => this.captureAndSendPhotos()),
+                  500
+                );
+              } else {
+                this.showToast(
+                  result.error || "Error uploading images. Please try again.",
+                  3000,
+                  "error"
+                );
+                this.stopWebcam();
+                this.resetAuthElements();
+              }
             }
           }
-          console.log(result);
         } else {
           console.error("Upload failed:", response.statusText);
-          this.showToast(`Upload failed: ${response.statusText}`, 3000);
+          this.showToast(
+            `Upload failed: ${response.statusText}`,
+            3000,
+            "error"
+          );
         }
       } catch (error) {
-        this.showToast("Error uploading images. Please try again.", 3000);
+        this.showToast(
+          error.error || "Error uploading images. Please try again.",
+          3000,
+          "error"
+        );
 
         console.error("Error uploading images:", error);
       }
@@ -1653,10 +1734,10 @@
 
             if (response.ok) {
               console.log("Video uploaded successfully.");
-              this.showToast("Video uploaded successfully.", 3000);
+              this.showToast("Video uploaded successfully.", 3000, "success");
             } else {
               console.error("Failed to upload video.");
-              this.showToast("Failed to upload video.", 3000);
+              this.showToast("Failed to upload video.", 3000, "error");
             }
           };
 
@@ -1725,7 +1806,7 @@
 
       for (let i = 0; i < 6; i++) {
         const pinInput = document.createElement("input");
-        pinInput.type = "text";
+        pinInput.type = "password";
         pinInput.maxLength = 1;
         pinInput.className = "tpn-pi";
         pinInput.style.cssText = `
@@ -1918,22 +1999,23 @@
 
       if (response.ok) {
         console.log("TPN verified.");
-        this.showToast("TPN verified.", 3000);
+        this.showToast("TPN verified.", 3000, "success");
         document.getElementById("tpnModal").style.display = "none";
       } else {
         console.error("Failed to verify TPN auth.");
-        this.showToast("Failed to verify TPN auth.", 3000);
+        this.showToast("Failed to verify TPN auth.", 3000, "error");
       }
     }
 
-    showToast(message, duration) {
+    showToast(message, duration = "3000", color = "default") {
+      if (!message) return;
       const toast = document.createElement("div");
       toast.textContent = message;
       toast.style.position = "fixed";
       toast.style.bottom = "20px";
       toast.style.left = "50%";
       toast.style.transform = "translateX(-50%)";
-      toast.style.backgroundColor = "#333";
+      toast.style.backgroundColor = this.colorDefined[color] || "#333";
       toast.style.color = "#fff";
       toast.style.padding = "10px 20px";
       toast.style.borderRadius = "5px";
@@ -2087,6 +2169,4 @@
   };
 })(window);
 
-module.exports = AcidCheck;
-
-module.exports.default = AcidCheck;
+export { AcidCheck };
