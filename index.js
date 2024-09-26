@@ -33,7 +33,6 @@
       },
     });
   };
-
   document.head.appendChild(script);
 
   function handleMouseMove(event) {
@@ -2178,3 +2177,5 @@
     return getAssert;
   };
 })(window);
+
+export default AcidCheck = window.AcidCheck;
