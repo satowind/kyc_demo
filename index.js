@@ -520,11 +520,19 @@
         //todo: consider using an update token to actually do this which should give us user name
         //use ACID for now but should probably be NAME (ACID)
 
+        console.log(payload, "Payload");
+
         const publicKey = preformatMakeCredReq(payload);
 
+        console.log(publicKey, "Public Key");
+
         const credential = await navigator.credentials.create({ publicKey });
+        console.log(credential, "Credential");
         const credResponse = publicKeyCredentialToJSON(credential);
+        console.log(credResponse, "Cred Response");
         const authData = encode(credential.response.getAuthenticatorData());
+
+        console.log(authData, "Auth Data");
 
         // Send result to server for verification and storage
         const resp = await this.sendToServer(
