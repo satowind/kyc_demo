@@ -33,6 +33,7 @@
       },
     });
   };
+
   document.head.appendChild(script);
 
   function handleMouseMove(event) {
@@ -117,7 +118,11 @@
     retryCount = 0;
     maxRetries = 2;
 
-    constructor(acid, email, baseURI = "http://localhost:9088/api/v1") {
+    constructor(
+      acid,
+      email,
+      baseURI = "https://kyc.cloudspacetechs.com/api/v1"
+    ) {
       this.acid = acid;
       this.email = email;
       this.baseURI = baseURI;
@@ -2173,5 +2178,3 @@
     return getAssert;
   };
 })(window);
-
-export default AcidCheck = window.AcidCheck;
