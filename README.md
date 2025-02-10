@@ -1,5 +1,4 @@
-````md
-# KYC SDK Documentation
+#### KYC SDK Documentation
 
 ## Table of Contents
 
@@ -31,7 +30,7 @@ Use the following npm command to install the package in your web project:
 ```sh
 npm install kyc_package
 ```
-````
+
 
 ### 2. Import and Initialize
 
